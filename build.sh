@@ -9,17 +9,19 @@ python3 -c "import tkinter" 2>/dev/null || {
 }
 
 echo "Installing build dependencies..."
-pip install --quiet pyinstaller zstandard
+pip install --quiet pyinstaller zstandard py7zr tkinterdnd2
 
 echo "Building SuprComopressr..."
 pyinstaller \
   --onefile \
   --name SuprComopressr \
   --hidden-import zstandard \
+  --hidden-import py7zr \
   --hidden-import tkinter \
   --hidden-import tkinter.ttk \
   --hidden-import tkinter.filedialog \
   --hidden-import tkinter.messagebox \
+  --hidden-import tkinterdnd2 \
   main.py
 
 echo ""

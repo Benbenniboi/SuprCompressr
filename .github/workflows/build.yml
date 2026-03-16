@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get install -y python3-tk
-          pip install pyinstaller zstandard
+          pip install pyinstaller zstandard py7zr tkinterdnd2
 
       - name: Build
         run: |
@@ -27,10 +27,12 @@ jobs:
             --onefile \
             --name SuprComopressr \
             --hidden-import zstandard \
+            --hidden-import py7zr \
             --hidden-import tkinter \
             --hidden-import tkinter.ttk \
             --hidden-import tkinter.filedialog \
             --hidden-import tkinter.messagebox \
+            --hidden-import tkinterdnd2 \
             main.py
 
       - name: Upload artifact
@@ -49,7 +51,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install pyinstaller zstandard
+        run: pip install pyinstaller zstandard py7zr tkinterdnd2
 
       - name: Build
         run: |
@@ -57,10 +59,12 @@ jobs:
             --onefile `
             --name SuprComopressr `
             --hidden-import zstandard `
+            --hidden-import py7zr `
             --hidden-import tkinter `
             --hidden-import tkinter.ttk `
             --hidden-import tkinter.filedialog `
             --hidden-import tkinter.messagebox `
+            --hidden-import tkinterdnd2 `
             main.py
 
       - name: Upload artifact

@@ -8,24 +8,33 @@ import subprocess
 import sys
 
 
-def ensure_zstandard():
+def _try_install(package: str):
     try:
-        import zstandard  # noqa: F401
-    except ImportError:
-        print("zstandard not found. Installing...")
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", package],
+            stdout=subprocess.DEVNULL,
+        )
+        print(f"✅ {package} installed.")
+    except Exception as e:
+        print(f"⚠️  Could not install {package}: {e} (continuing without it)")
+
+
+def ensure_dependencies():
+    for module, package in [
+        ("zstandard",  "zstandard"),
+        ("py7zr",      "py7zr"),
+        ("tkinterdnd2","tkinterdnd2"),
+    ]:
         try:
-            subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", "zstandard"],
-                stdout=subprocess.DEVNULL,
-            )
-            print("✅ zstandard installed.\n")
-        except Exception as e:
-            print(f"⚠️  Could not install zstandard: {e}")
-            print("   Continuing without it (reduced compression).\n")
+            __import__(module)
+        except ImportError:
+            print(f"{package} not found. Installing...")
+            _try_install(package)
+    print()
 
 
 if __name__ == "__main__":
-    ensure_zstandard()
+    ensure_dependencies()
 
     print("SuprComopressr")
     print("1. GUI")
