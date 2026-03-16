@@ -1,49 +1,94 @@
 # SuprComopressr
 
-A Linux file compression tool written in Python. Supports standard formats plus a custom **SUPR** format capable of millions-to-one compression ratios on uniform data.
+A Linux file compression tool written in Python with both a CLI and a GUI. Supports standard formats plus a custom **SUPR** format capable of millions-to-one compression ratios on uniform data.
 
 ## Features
 
-- Compress and decompress files in 6 formats: `zip`, `gz`, `bz2`, `xz`, `zst`, `supr`
-- Convert `.supr` files to standard `.zip` while preserving the compression ratio
-- Streams large files (e.g. 10 GB+) in chunks — no out-of-memory crashes
-- Works on Chromebook Linux (Crostini) — handles drag-and-drop paths with quotes automatically
+- Compress and decompress **files and folders** in 9 formats: `supr`, `zip`, `gz`, `bz2`, `xz`, `zst`, `tar.gz`, `tar.xz`, `7z`
+- **Batch compress** multiple files at once
+- **Preview** archive contents without extracting
+- **Verify** archive integrity
+- **Benchmark** a file across all formats to find the best one
+- Convert `.supr` → `.zip` while preserving the compression ratio
+- Streams large files in chunks — no out-of-memory crashes
+- GUI with drag-and-drop support
+- Works on Chromebook Linux (Crostini)
 
 ## Requirements
 
 - Python 3.11+
-- `zstandard` (optional, but recommended for maximum compression)
+
+Optional dependencies (auto-installed on first run via `main.py`):
+
+| Package | Purpose |
+|---------|---------|
+| `zstandard` | zst format + SUPR fallback compression |
+| `py7zr` | 7z format support |
+| `tkinterdnd2` | Drag-and-drop in the GUI |
 
 ```bash
-pip install zstandard
+pip install zstandard py7zr tkinterdnd2
 ```
 
 ## Usage
+
+### GUI + CLI launcher (recommended)
+
+```bash
+python3 main.py
+```
+
+Automatically installs missing dependencies, then asks:
+```
+1. GUI
+2. CLI
+```
+
+### CLI only
 
 ```bash
 python3 suprcompressr.py
 ```
 
-Then follow the interactive menu:
-
 ```
 === MAIN MENU ===
-1. Compress file
+1. Compress file/folder
 2. Decompress file
-3. Convert .supr → .zip (keeps ratio)
-4. Exit
+3. Convert .supr → .zip
+4. Batch compress
+5. Preview archive
+6. Verify archive
+7. Benchmark file
+8. Exit
 ```
+
+## GUI
+
+The GUI has five tabs:
+
+| Tab | What it does |
+|-----|-------------|
+| **Compress** | Compress a file or folder, choose format and level |
+| **Decompress** | Decompress with Preview and Verify buttons |
+| **Batch** | Select multiple files and compress them all at once |
+| **.supr→.zip** | Convert a `.supr` file to a standard `.zip` |
+| **Benchmark** | Run all formats on a file and compare size, ratio, and speed |
+
+All long operations run in a background thread with a live progress bar.
 
 ## Formats
 
-| Format | Extension | Notes |
-|--------|-----------|-------|
-| zip | `.zip` | Standard DEFLATE, levels 1–9 |
-| gz | `.gz` | gzip, levels 1–9 |
-| bz2 | `.bz2` | bzip2, levels 1–9 |
-| xz | `.xz` | LZMA, levels 1–9 |
-| zst | `.zst` | Zstandard (best general-purpose), requires `zstandard` |
-| supr | `.supr` | Custom format, see below |
+| Format | Extension | Folder support | Notes |
+|--------|-----------|:--------------:|-------|
+| supr | `.supr` | — | Custom format, see below |
+| zip | `.zip` | ✅ | Standard DEFLATE, levels 1–9 |
+| gz | `.gz` | — | gzip, levels 1–9 |
+| bz2 | `.bz2` | — | bzip2, levels 1–9 |
+| xz | `.xz` | — | LZMA, levels 1–9 |
+| zst | `.zst` | — | Zstandard, requires `zstandard` |
+| tar.gz | `.tar.gz` | ✅ | Standard Linux archive |
+| tar.xz | `.tar.xz` | ✅ | Standard Linux archive |
+| 7z | `.7z` | ✅ | Requires `py7zr` |
 
 ## The SUPR Format
 
@@ -51,7 +96,7 @@ SUPR is a custom binary format designed for extreme compression ratios.
 
 **How it works:**
 
-- If the file consists entirely of one repeated byte (e.g. a file of all zeros), SUPR stores just the byte value and the original length — **14 bytes total**, regardless of file size. A 10 GB file of zeros becomes 14 bytes.
+- If every byte in the file is identical (e.g. a file of all zeros), SUPR stores just the byte value and the original length — **14 bytes total**, regardless of file size. A 10 GB file of zeros becomes 14 bytes.
 - Otherwise it falls back to Zstandard level 22 (or zlib level 9 if `zstandard` is not installed).
 
 **File structure:**
@@ -68,14 +113,34 @@ SUPR is a custom binary format designed for extreme compression ratios.
 
 > **Note:** Millions-to-one ratios only occur for uniform-byte files. Real-world files will see ratios typical of zstd/zlib.
 
-## Convert .supr to .zip
+> **Warning:** Converting a `.supr` uniform file to `.zip` produces a zip bomb — the ZIP will expand to its full original size when extracted. Make sure recipients have enough disk space.
 
-Option 3 re-packages a `.supr` file as a standard `.zip` that any unzip tool can open, while preserving the compression ratio:
+## Building an executable
 
-- For uniform files (type 0): streams data in 64 MB chunks directly into the ZIP compressor — works on files larger than available RAM
-- For type 1/2: decompresses then recompresses with DEFLATE level 9
+### Linux (Crostini)
 
-The ZIP entry uses the original filename (`.supr` extension stripped), so extracting it gives back the original file.
+```bash
+bash build.sh
+./dist/SuprComopressr
+```
+
+### Windows
+
+```bat
+build_windows.bat
+dist\SuprComopressr.exe
+```
+
+### GitHub Actions (automated)
+
+Push a version tag to build both automatically:
+
+```bash
+git tag v1.0
+git push --tags
+```
+
+The Linux binary and Windows `.exe` will be attached to a GitHub Release.
 
 ## License
 
