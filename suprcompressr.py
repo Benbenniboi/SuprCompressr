@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SuprComopressr - Python app for Linux
+SuprCompressr - Python app for Linux
 Extreme compression with SUPER mode, folder support, batch, preview, verify, benchmark.
 """
 
@@ -624,7 +624,7 @@ def _bench_7z(data: bytes, name: str) -> bytes:
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
 def main():
-    print("🚀 SuprComopressr for Linux")
+    print("🚀 SuprCompressr for Linux")
     print(f"   Working dir: {Path.cwd()}\n")
 
     while True:

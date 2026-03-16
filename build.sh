@@ -11,10 +11,10 @@ python3 -c "import tkinter" 2>/dev/null || {
 echo "Installing build dependencies..."
 pip install --quiet pyinstaller zstandard py7zr tkinterdnd2
 
-echo "Building SuprComopressr..."
+echo "Building SuprCompressr..."
 pyinstaller \
   --onefile \
-  --name SuprComopressr \
+  --name SuprCompressr \
   --hidden-import zstandard \
   --hidden-import py7zr \
   --hidden-import tkinter \
@@ -25,5 +25,5 @@ pyinstaller \
   main.py
 
 echo ""
-echo "✅ Done! Executable: dist/SuprComopressr"
-echo "   Run with: ./dist/SuprComopressr"
+echo "✅ Done! Executable: dist/SuprCompressr"
+echo "   Run with: ./dist/SuprCompressr"

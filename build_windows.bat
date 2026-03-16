@@ -2,10 +2,10 @@
 echo Installing build dependencies...
 pip install pyinstaller zstandard py7zr tkinterdnd2
 
-echo Building SuprComopressr.exe...
+echo Building SuprCompressr.exe...
 pyinstaller ^
   --onefile ^
-  --name SuprComopressr ^
+  --name SuprCompressr ^
   --hidden-import zstandard ^
   --hidden-import py7zr ^
   --hidden-import tkinter ^
@@ -16,5 +16,5 @@ pyinstaller ^
   main.py
 
 echo.
-echo Done! Executable: dist\SuprComopressr.exe
+echo Done! Executable: dist\SuprCompressr.exe
 pause

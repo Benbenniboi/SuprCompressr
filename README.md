@@ -42,6 +42,16 @@ Automatically installs missing dependencies, then asks:
 ```
 1. GUI
 2. CLI
+3. Install to app launcher
+```
+
+**Flags:**
+```bash
+python3 main.py --gui          # launch GUI directly
+python3 main.py --cli          # launch CLI directly
+python3 main.py --install      # install to app launcher (prompts GUI or CLI)
+python3 main.py --install-gui  # install GUI launcher entry silently
+python3 main.py --install-cli  # install CLI launcher entry silently
 ```
 
 ### CLI only
@@ -121,14 +131,14 @@ SUPR is a custom binary format designed for extreme compression ratios.
 
 ```bash
 bash build.sh
-./dist/SuprComopressr
+./dist/SuprCompressr
 ```
 
 ### Windows
 
 ```bat
 build_windows.bat
-dist\SuprComopressr.exe
+dist\SuprCompressr.exe
 ```
 
 ### GitHub Actions (automated)
