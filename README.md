@@ -1,4 +1,4 @@
-# SuprComopressr
+# SuprCompressr
 
 A Linux file compression tool written in Python with both a CLI and a GUI. Supports standard formats plus a custom **SUPR** format capable of millions-to-one compression ratios on uniform data.
 
