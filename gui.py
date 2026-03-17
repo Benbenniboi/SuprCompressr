@@ -253,7 +253,7 @@ def _make_file_listbox(parent):
 
 # ─── Settings row helper ───────────────────────────────────────────────────────
 
-def _setting_row(parent, label, widget, pady=8):
+def _setting_row(parent, label, pady=8):
     row = tk.Frame(parent, bg=PANEL)
     row.pack(fill="x", padx=16, pady=(pady, 0))
     tk.Label(row, text=label, bg=PANEL, fg=SUBTEXT,
