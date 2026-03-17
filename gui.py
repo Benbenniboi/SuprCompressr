@@ -10,7 +10,6 @@ from typing import Optional
 
 import suprcompressr as core
 
-# Optional drag-and-drop
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
     HAS_DND = True
@@ -20,108 +19,98 @@ except ImportError:
 _result_queue: queue.Queue = queue.Queue()
 _progress_queue: queue.Queue = queue.Queue()
 
-# ─── Colour palette ───────────────────────────────────────────────────────────
+# ─── Colour palette (matches mockup) ──────────────────────────────────────────
 
-C = {
-    "bg":           "#0f0f1a",
-    "surface":      "#1a1a2e",
-    "card":         "#16213e",
-    "border":       "#2a2a4a",
-    "accent":       "#6366f1",
-    "accent_hover": "#4f46e5",
-    "accent_dim":   "#312e81",
-    "text":         "#f1f5f9",
-    "subtext":      "#94a3b8",
-    "entry_bg":     "#1e1e3a",
-}
+BG      = "#252830"   # main window
+PANEL   = "#1d1f27"   # panel / sidebar
+HEADER  = "#2a2d3a"   # panel header strip
+BORDER  = "#3a3d4f"   # borders & separators
+ACCENT  = "#4a8fd4"   # blue highlight
+TEXT    = "#e8eaf0"   # primary text
+SUBTEXT = "#7a7e9a"   # secondary / inactive
+ENTRY   = "#1a1c24"   # input fields
+BTN     = "#3d7fc4"   # button fill
+BTN_HOV = "#2d6ab4"   # button hover
 
+# ─── Format / level maps ──────────────────────────────────────────────────────
 
-def _apply_theme(root):
-    root.configure(bg=C["bg"])
-    s = ttk.Style(root)
-    s.theme_use("clam")
+LEVEL_OPTS = [
+    ("Fast (Lowest)",    1),
+    ("Low",              3),
+    ("Medium",           5),
+    ("High",             7),
+    ("Ultra (Highest)",  9),
+]
+LEVEL_NAMES = [n for n, _ in LEVEL_OPTS]
+LEVEL_MAP   = {n: v for n, v in LEVEL_OPTS}
 
-    s.configure(".",
-                background=C["bg"], foreground=C["text"],
-                font=("Helvetica", 10), borderwidth=0, relief="flat")
-
-    s.configure("TFrame",    background=C["bg"])
-    s.configure("TLabel",    background=C["bg"], foreground=C["text"])
-    s.configure("Sub.TLabel",background=C["bg"], foreground=C["subtext"],
-                font=("Helvetica", 9))
-
-    s.configure("TButton",
-                background=C["accent"], foreground="white",
-                font=("Helvetica", 10, "bold"), padding=(14, 8),
-                borderwidth=0, focusthickness=0, focuscolor="none",
-                relief="flat")
-    s.map("TButton",
-          background=[("active",   C["accent_hover"]),
-                      ("disabled", C["accent_dim"]),
-                      ("pressed",  C["accent_hover"])],
-          foreground=[("disabled", C["subtext"])])
-
-    s.configure("Small.TButton",
-                font=("Helvetica", 9), padding=(8, 5))
-    s.map("Small.TButton",
-          background=[("active",   C["accent_hover"]),
-                      ("disabled", C["accent_dim"])])
-
-    s.configure("TEntry",
-                fieldbackground=C["entry_bg"], foreground=C["text"],
-                insertcolor=C["text"], bordercolor=C["border"],
-                lightcolor=C["border"], darkcolor=C["border"],
-                padding=(6, 5))
-    s.map("TEntry",
-          fieldbackground=[("focus", C["card"])])
-
-    s.configure("TCombobox",
-                fieldbackground=C["entry_bg"], foreground=C["text"],
-                selectbackground=C["accent"], selectforeground="white",
-                bordercolor=C["border"], arrowcolor=C["text"],
-                padding=(4, 4))
-    s.map("TCombobox",
-          fieldbackground=[("readonly", C["entry_bg"])],
-          foreground=[("readonly", C["text"])])
-
-    s.configure("TNotebook",
-                background=C["surface"], borderwidth=0,
-                tabmargins=(0, 0, 0, 0))
-    s.configure("TNotebook.Tab",
-                background=C["surface"], foreground=C["subtext"],
-                padding=(18, 10), font=("Helvetica", 10))
-    s.map("TNotebook.Tab",
-          background=[("selected", C["bg"])],
-          foreground=[("selected", C["text"])],
-          expand=[("selected", (0, 0, 0, 0))])
-
-    s.configure("TProgressbar",
-                troughcolor=C["border"], background=C["accent"],
-                borderwidth=0, lightcolor=C["accent"], darkcolor=C["accent"],
-                thickness=5)
-
-    s.configure("TScale",
-                background=C["bg"], troughcolor=C["border"],
-                sliderlength=14, sliderthickness=14)
-    s.map("TScale",
-          troughcolor=[("active", C["border"])])
-
-    s.configure("TScrollbar",
-                background=C["card"], troughcolor=C["bg"],
-                arrowcolor=C["subtext"], borderwidth=0)
-    s.map("TScrollbar",
-          background=[("active", C["accent"])])
-
-    s.configure("TSeparator", background=C["border"])
-
-    # Make Combobox popup list dark
-    root.option_add("*TCombobox*Listbox.background",  C["card"])
-    root.option_add("*TCombobox*Listbox.foreground",  C["text"])
-    root.option_add("*TCombobox*Listbox.selectBackground", C["accent"])
-    root.option_add("*TCombobox*Listbox.selectForeground", "white")
+FMT_OPTS = [
+    ("SUPR (Extreme)", "supr"),
+    ("ZIP",            "zip"),
+    ("GZ",             "gz"),
+    ("BZ2",            "bz2"),
+    ("XZ",             "xz"),
+    ("ZST",            "zst"),
+    ("TAR.GZ",         "tar.gz"),
+    ("TAR.XZ",         "tar.xz"),
+    ("7Z",             "7z"),
+]
+FMT_NAMES = [n for n, _ in FMT_OPTS]
+FMT_MAP   = {n: v for n, v in FMT_OPTS}
 
 
-# ─── Threading helpers ────────────────────────────────────────────────────────
+# ─── Tiny style helpers ────────────────────────────────────────────────────────
+
+def _lbl(parent, text, size=10, bold=False, color=TEXT, **kw):
+    font = ("Helvetica", size, "bold" if bold else "normal")
+    return tk.Label(parent, text=text, bg=kw.pop("bg", parent["bg"]),
+                    fg=color, font=font, **kw)
+
+def _btn(parent, text, cmd, wide=False, small=False, **kw):
+    size = 9 if small else 11
+    pad  = (10, 5) if small else (18, 10)
+    b = tk.Button(parent, text=text, command=cmd,
+                  bg=BTN, fg="white", activebackground=BTN_HOV,
+                  activeforeground="white", relief="flat", bd=0,
+                  font=("Helvetica", size, "bold"),
+                  padx=pad[0], pady=pad[1], cursor="hand2", **kw)
+    return b
+
+def _sep(parent, orient="horizontal"):
+    return tk.Frame(parent,
+                    bg=BORDER,
+                    height=1 if orient == "horizontal" else 0,
+                    width=0 if orient == "horizontal" else 1)
+
+def _combo(parent, var, values, width=22):
+    style = ttk.Style()
+    style.configure("Dark.TCombobox",
+                    fieldbackground=ENTRY, background=HEADER,
+                    foreground=TEXT, selectbackground=ACCENT,
+                    selectforeground="white", arrowcolor=TEXT,
+                    bordercolor=BORDER, lightcolor=BORDER,
+                    darkcolor=BORDER, insertcolor=TEXT)
+    style.map("Dark.TCombobox",
+              fieldbackground=[("readonly", ENTRY)],
+              foreground=[("readonly", TEXT)])
+    cb = ttk.Combobox(parent, textvariable=var, values=values,
+                      state="readonly", width=width, style="Dark.TCombobox")
+    parent.option_add("*TCombobox*Listbox.background",       ENTRY)
+    parent.option_add("*TCombobox*Listbox.foreground",       TEXT)
+    parent.option_add("*TCombobox*Listbox.selectBackground", ACCENT)
+    parent.option_add("*TCombobox*Listbox.selectForeground", "white")
+    return cb
+
+def _entry(parent, var, width=28):
+    e = tk.Entry(parent, textvariable=var, bg=ENTRY, fg=TEXT,
+                 insertbackground=TEXT, relief="flat",
+                 font=("Helvetica", 10), bd=0,
+                 highlightbackground=BORDER, highlightthickness=1,
+                 highlightcolor=ACCENT)
+    return e
+
+
+# ─── Threading helpers ─────────────────────────────────────────────────────────
 
 def _run_in_thread(target_fn, *args, **kwargs):
     buf = io.StringIO()
@@ -132,496 +121,695 @@ def _run_in_thread(target_fn, *args, **kwargs):
     except Exception as e:
         _result_queue.put(("error", str(e)))
 
-
 def _progress_cb(current: int, total: int):
     if total > 0:
         _progress_queue.put(current / total * 100)
 
-
-def _start_operation(root, btn, status_label, progress_bar, target_fn, *args, **kwargs):
+def _start_op(root, btn, status_var, pbar, fn, *args, **kwargs):
     while not _result_queue.empty():
         _result_queue.get_nowait()
     while not _progress_queue.empty():
         _progress_queue.get_nowait()
-
     btn.config(state="disabled")
-    status_label.config(text="Working…")
-    progress_bar.config(mode="indeterminate")
-    progress_bar.start(10)
+    status_var.set("Working…")
+    pbar.config(mode="indeterminate")
+    pbar.start(10)
+    threading.Thread(target=_run_in_thread, args=(fn, *args),
+                     kwargs=kwargs, daemon=True).start()
+    root.after(100, _poll, root, btn, status_var, pbar)
 
-    threading.Thread(
-        target=_run_in_thread, args=(target_fn, *args), kwargs=kwargs, daemon=True
-    ).start()
-    root.after(100, _poll, root, btn, status_label, progress_bar)
-
-
-def _poll(root, btn, status_label, progress_bar):
+def _poll(root, btn, status_var, pbar):
     try:
         while True:
             pct = _progress_queue.get_nowait()
-            if progress_bar.cget("mode") == "indeterminate":
-                progress_bar.stop()
-                progress_bar.config(mode="determinate")
-            progress_bar["value"] = pct
+            if pbar.cget("mode") == "indeterminate":
+                pbar.stop()
+                pbar.config(mode="determinate")
+            pbar["value"] = pct
     except queue.Empty:
         pass
-
     try:
         kind, msg = _result_queue.get_nowait()
-        progress_bar.stop()
-        progress_bar.config(mode="determinate", value=0)
+        pbar.stop()
+        pbar.config(mode="determinate", value=0)
         btn.config(state="normal")
         if kind == "ok":
-            status_label.config(text="Done.")
+            status_var.set("Done.")
             messagebox.showinfo("Result", msg.strip() or "Complete.")
         else:
-            status_label.config(text="Error.")
+            status_var.set("Error.")
             messagebox.showerror("Error", msg)
     except queue.Empty:
-        root.after(100, _poll, root, btn, status_label, progress_bar)
+        root.after(100, _poll, root, btn, status_var, pbar)
 
 
-# ─── Path helpers ─────────────────────────────────────────────────────────────
+# ─── Shared file-list helpers ──────────────────────────────────────────────────
 
 def _clean(val: str) -> Optional[str]:
     v = val.strip().strip("'\"")
     return str(Path(v).expanduser()) if v else None
 
+def _fmt_size(b: int) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if b < 1024:
+            return f"{b:.1f} {unit}"
+        b /= 1024
+    return f"{b:.1f} PB"
 
-def _bind_drop(widget, var):
-    if HAS_DND:
-        widget.drop_target_register(DND_FILES)
-        widget.dnd_bind("<<Drop>>", lambda e: var.set(e.data.strip("{}")))
+def _update_info(file_list: list, info_var: tk.StringVar):
+    n = len(file_list)
+    if n == 0:
+        info_var.set("No files selected")
+        return
+    total = sum(Path(f).stat().st_size for f in file_list if Path(f).exists())
+    info_var.set(f"Files: {n}  |  Original Size: {_fmt_size(total)}")
 
 
-def _row(frame, row, label_text, widget, browse_btn=None, pady=8):
-    """Helper: label | widget | optional browse button on one grid row."""
-    ttk.Label(frame, text=label_text).grid(
-        row=row, column=0, sticky="w", pady=pady, padx=(0, 12))
-    widget.grid(row=row, column=1, sticky="ew", padx=(0, 8))
-    if browse_btn:
-        browse_btn.grid(row=row, column=2, sticky="e")
-    frame.columnconfigure(1, weight=1)
+# ─── Drop zone ────────────────────────────────────────────────────────────────
+
+def _make_drop_zone(parent, on_browse, on_drop=None):
+    canvas = tk.Canvas(parent, bg=PANEL, highlightthickness=0,
+                       height=130, cursor="hand2")
+
+    def _draw(event=None):
+        canvas.delete("all")
+        w = canvas.winfo_width() or 420
+        h = canvas.winfo_height() or 130
+        # Dashed border
+        canvas.create_rectangle(10, 10, w - 10, h - 10,
+                                 outline=ACCENT, dash=(8, 5), width=1)
+        # Icon (simple up-arrow)
+        cx = w // 2
+        canvas.create_text(cx, h // 2 - 20, text="Select Files to Compress",
+                            fill=TEXT, font=("Helvetica", 12, "bold"))
+        canvas.create_text(cx, h // 2 + 10,
+                            text="\u2191  Drag & Drop or Browse Files",
+                            fill=ACCENT, font=("Helvetica", 10))
+
+    canvas.bind("<Configure>", _draw)
+    canvas.bind("<Button-1>", lambda e: on_browse())
+
+    if HAS_DND and on_drop:
+        canvas.drop_target_register(DND_FILES)
+        canvas.dnd_bind("<<Drop>>", on_drop)
+
+    return canvas
 
 
-# ─── Compress tab ─────────────────────────────────────────────────────────────
+# ─── Panel header ─────────────────────────────────────────────────────────────
 
-def _build_compress_tab(frame, root, status_label, progress_bar):
-    infile_var  = tk.StringVar()
-    outfile_var = tk.StringVar()
-    fmt_var     = tk.StringVar(value="supr")
-    level_var   = tk.IntVar(value=9)
+def _panel_header(parent, title):
+    h = tk.Frame(parent, bg=HEADER, pady=10)
+    h.pack(fill="x")
+    tk.Label(h, text=f"  {title}", bg=HEADER, fg=TEXT,
+             font=("Helvetica", 11, "bold")).pack(side="left")
+    return h
 
-    ALL_FMTS = ["supr", "zip", "gz", "bz2", "xz", "zst", "tar.gz", "tar.xz", "7z"]
 
-    def browse_in():
-        p = filedialog.askopenfilename(title="Select file")
-        if p:
-            infile_var.set(p)
+# ─── File listbox ─────────────────────────────────────────────────────────────
+
+def _make_file_listbox(parent):
+    sub = tk.Frame(parent, bg=HEADER, pady=7)
+    sub.pack(fill="x")
+    tk.Label(sub, text="  Files to Compress", bg=HEADER, fg=SUBTEXT,
+             font=("Helvetica", 9, "bold")).pack(side="left")
+
+    frame = tk.Frame(parent, bg=PANEL)
+    frame.pack(fill="both", expand=True)
+
+    sb = tk.Scrollbar(frame, bg=PANEL, troughcolor=PANEL,
+                      activebackground=ACCENT, relief="flat", bd=0)
+    sb.pack(side="right", fill="y")
+
+    lb = tk.Listbox(frame, bg=PANEL, fg=TEXT,
+                    selectbackground=ACCENT, selectforeground="white",
+                    font=("Helvetica", 10), borderwidth=0,
+                    highlightthickness=0, activestyle="none",
+                    yscrollcommand=sb.set, relief="flat")
+    lb.pack(fill="both", expand=True, padx=(8, 0), pady=4)
+    sb.config(command=lb.yview)
+    return lb
+
+
+# ─── Settings row helper ───────────────────────────────────────────────────────
+
+def _setting_row(parent, label, widget, pady=8):
+    row = tk.Frame(parent, bg=PANEL)
+    row.pack(fill="x", padx=16, pady=(pady, 0))
+    tk.Label(row, text=label, bg=PANEL, fg=SUBTEXT,
+             font=("Helvetica", 9), width=20, anchor="w").pack(side="left")
+    widget_frame = tk.Frame(row, bg=PANEL)
+    widget_frame.pack(side="left", fill="x", expand=True)
+    return widget_frame
+
+
+# ─── Compress mode ─────────────────────────────────────────────────────────────
+
+def _build_compress(parent, root, status_var, info_var, pbar):
+    file_list: list[str] = []
+
+    # ── Left panel ──
+    left = tk.Frame(parent, bg=PANEL, width=380)
+    left.pack(side="left", fill="both", expand=True)
+    left.pack_propagate(False)
+    _panel_header(left, "File Selection")
+
+    def browse():
+        paths = filedialog.askopenfilenames(title="Select files or a folder")
+        if paths:
+            for p in paths:
+                if p not in file_list:
+                    file_list.append(p)
+                    lb.insert("end", f"  {Path(p).name}")
+            _update_info(file_list, info_var)
 
     def browse_folder():
         p = filedialog.askdirectory(title="Select folder")
-        if p:
-            infile_var.set(p)
+        if p and p not in file_list:
+            file_list.append(p)
+            lb.insert("end", f"  {Path(p).name}")
+            _update_info(file_list, info_var)
 
-    def browse_out():
-        ext_map = {"zip":".zip","supr":".supr","gz":".gz","bz2":".bz2",
-                   "xz":".xz","zst":".zst","tar.gz":".tar.gz",
-                   "tar.xz":".tar.xz","7z":".7z"}
-        p = filedialog.asksaveasfilename(
-            defaultextension=ext_map.get(fmt_var.get(), ""))
-        if p:
-            outfile_var.set(p)
+    def on_drop(event):
+        raw = event.data.strip()
+        paths = raw.split("} {") if "{" in raw else raw.split()
+        paths = [p.strip("{}") for p in paths]
+        for p in paths:
+            if p not in file_list:
+                file_list.append(p)
+                lb.insert("end", f"  {Path(p).name}")
+        _update_info(file_list, info_var)
 
-    def on_fmt_change(*_):
-        state = "disabled" if fmt_var.get() in ("supr", "7z") else "normal"
-        level_slider.config(state=state)
-        level_lbl.config(state=state)
+    drop = _make_drop_zone(left, browse, on_drop if HAS_DND else None)
+    drop.pack(fill="x", padx=14, pady=12)
 
-    # Input row with two browse buttons
-    ttk.Label(frame, text="Input:").grid(row=0, column=0, sticky="w",
-                                         pady=8, padx=(0, 12))
-    in_entry = ttk.Entry(frame, textvariable=infile_var)
-    in_entry.grid(row=0, column=1, sticky="ew", padx=(0, 8))
-    _bind_drop(in_entry, infile_var)
-    btn_frame = ttk.Frame(frame)
-    btn_frame.grid(row=0, column=2, sticky="e")
-    ttk.Button(btn_frame, text="File",   style="Small.TButton",
-               command=browse_in).pack(side="left", padx=(0, 4))
-    ttk.Button(btn_frame, text="Folder", style="Small.TButton",
-               command=browse_folder).pack(side="left")
+    folder_btn = tk.Button(left, text="+ Add Folder", command=browse_folder,
+                           bg=HEADER, fg=ACCENT, relief="flat", bd=0,
+                           font=("Helvetica", 9), padx=10, pady=4,
+                           cursor="hand2", activebackground=HEADER,
+                           activeforeground=TEXT)
+    folder_btn.pack(anchor="e", padx=14, pady=(0, 6))
+
+    _sep(left).pack(fill="x", padx=14)
+
+    lb = _make_file_listbox(left)
+
+    def remove_selected(event=None):
+        sel = lb.curselection()
+        for i in reversed(sel):
+            lb.delete(i)
+            file_list.pop(i)
+        _update_info(file_list, info_var)
+
+    def clear_all():
+        lb.delete(0, "end")
+        file_list.clear()
+        _update_info(file_list, info_var)
+
+    action_row = tk.Frame(left, bg=PANEL)
+    action_row.pack(fill="x", padx=10, pady=6)
+    tk.Button(action_row, text="Remove Selected", command=remove_selected,
+              bg=PANEL, fg=SUBTEXT, relief="flat", bd=0,
+              font=("Helvetica", 8), cursor="hand2",
+              activebackground=PANEL, activeforeground=TEXT).pack(side="left")
+    tk.Button(action_row, text="Clear All", command=clear_all,
+              bg=PANEL, fg=SUBTEXT, relief="flat", bd=0,
+              font=("Helvetica", 8), cursor="hand2",
+              activebackground=PANEL, activeforeground=TEXT).pack(side="right")
+    lb.bind("<Delete>", remove_selected)
+
+    # ── Divider ──
+    _sep(parent, "vertical").pack(side="left", fill="y")
+
+    # ── Right panel ──
+    right = tk.Frame(parent, bg=PANEL, width=300)
+    right.pack(side="left", fill="both", expand=True)
+    right.pack_propagate(False)
+    _panel_header(right, "Compression Settings")
+
+    fmt_var   = tk.StringVar(value="ZIP")
+    level_var = tk.StringVar(value="Ultra (Highest)")
+    out_var   = tk.StringVar()
+
+    tk.Frame(right, bg=PANEL, height=10).pack()
 
     # Format
-    ttk.Label(frame, text="Format:").grid(row=1, column=0, sticky="w",
-                                           pady=8, padx=(0, 12))
-    fmt_cb = ttk.Combobox(frame, textvariable=fmt_var, width=12,
-                          values=ALL_FMTS, state="readonly")
-    fmt_cb.grid(row=1, column=1, sticky="w", padx=(0, 8))
-    fmt_cb.bind("<<ComboboxSelected>>", on_fmt_change)
+    wf = _setting_row(right, "Compression Format:")
+    _combo(wf, fmt_var, FMT_NAMES).pack(side="left")
 
     # Level
-    ttk.Label(frame, text="Level (1–9):").grid(row=2, column=0, sticky="w",
-                                                pady=8, padx=(0, 12))
-    level_row = ttk.Frame(frame)
-    level_row.grid(row=2, column=1, sticky="w", padx=(0, 8))
-    level_slider = ttk.Scale(level_row, from_=1, to=9, variable=level_var,
-                             orient="horizontal", length=140, state="disabled",
-                             command=lambda v: level_var.set(int(float(v))))
-    level_slider.pack(side="left")
-    level_lbl = ttk.Label(level_row, textvariable=level_var, width=2,
-                          state="disabled")
-    level_lbl.pack(side="left", padx=(8, 0))
+    wl = _setting_row(right, "Compression Level:")
+    _combo(wl, level_var, LEVEL_NAMES).pack(side="left")
 
-    # Output
-    ttk.Label(frame, text="Output (opt):").grid(row=3, column=0, sticky="w",
-                                                 pady=8, padx=(0, 12))
-    out_entry = ttk.Entry(frame, textvariable=outfile_var)
-    out_entry.grid(row=3, column=1, sticky="ew", padx=(0, 8))
-    _bind_drop(out_entry, outfile_var)
-    ttk.Button(frame, text="Browse", style="Small.TButton",
-               command=browse_out).grid(row=3, column=2, sticky="e")
+    # Output dir
+    wo = _setting_row(right, "Output Directory:")
+    _entry(wo, out_var, width=18).pack(side="left", fill="x", expand=True)
+    tk.Button(wo, text="Browse",
+              command=lambda: out_var.set(filedialog.askdirectory() or out_var.get()),
+              bg=HEADER, fg=TEXT, relief="flat", bd=0,
+              font=("Helvetica", 9), padx=8, pady=4, cursor="hand2",
+              activebackground=BORDER, activeforeground=TEXT).pack(side="left", padx=(6, 0))
 
-    ttk.Separator(frame, orient="horizontal").grid(
-        row=4, column=0, columnspan=3, sticky="ew", pady=14)
+    tk.Frame(right, bg=PANEL, height=18).pack()
+    _sep(right).pack(fill="x", padx=16, pady=0)
+    tk.Frame(right, bg=PANEL, height=18).pack()
 
-    btn = ttk.Button(frame, text="Compress", command=lambda: _start_operation(
-        root, btn, status_label, progress_bar,
-        core.perform_compression,
-        _clean(infile_var.get()), fmt_var.get(), level_var.get(),
-        _clean(outfile_var.get()), _progress_cb
-    ))
-    btn.grid(row=5, column=0, columnspan=3)
-    frame.columnconfigure(1, weight=1)
+    def do_compress():
+        if not file_list:
+            messagebox.showerror("Error", "No files selected.")
+            return
+        fmt   = FMT_MAP.get(fmt_var.get(), "zip")
+        level = LEVEL_MAP.get(level_var.get(), 9)
+        out   = _clean(out_var.get())
+        if len(file_list) == 1:
+            out_path = None
+            if out:
+                name = Path(file_list[0]).name
+                ext  = {"supr": ".supr","zip": ".zip","gz": ".gz","bz2": ".bz2",
+                        "xz": ".xz","zst": ".zst","tar.gz": ".tar.gz",
+                        "tar.xz": ".tar.xz","7z": ".7z"}.get(fmt, "")
+                out_path = str(Path(out) / (name + ext))
+            _start_op(root, start_btn, status_var, pbar,
+                      core.perform_compression,
+                      file_list[0], fmt, level, out_path, _progress_cb)
+        else:
+            _start_op(root, start_btn, status_var, pbar,
+                      core.perform_batch_compression,
+                      list(file_list), fmt, level, out, _progress_cb)
+
+    start_btn = _btn(right, "Start Compression", do_compress)
+    start_btn.pack(fill="x", padx=16, pady=(0, 6))
 
 
-# ─── Decompress tab ───────────────────────────────────────────────────────────
+# ─── Decompress mode ───────────────────────────────────────────────────────────
 
-def _build_decompress_tab(frame, root, status_label, progress_bar):
-    infile_var  = tk.StringVar()
-    outfile_var = tk.StringVar()
+def _build_decompress(parent, root, status_var, info_var, pbar):
+    left = tk.Frame(parent, bg=PANEL, width=380)
+    left.pack(side="left", fill="both", expand=True)
+    left.pack_propagate(False)
+    _panel_header(left, "File Selection")
+
+    in_var  = tk.StringVar()
+    out_var = tk.StringVar()
 
     def browse_in():
         p = filedialog.askopenfilename(
-            filetypes=[("Archives",
-                        "*.supr *.zip *.gz *.bz2 *.xz *.zst *.7z *.tar.gz *.tar.xz"),
+            filetypes=[("Archives", "*.supr *.zip *.gz *.bz2 *.xz *.zst *.7z"),
                        ("All", "*")])
         if p:
-            infile_var.set(p)
+            in_var.set(p)
+            info_var.set(f"Selected: {Path(p).name}")
 
-    def browse_out():
-        p = filedialog.asksaveasfilename()
-        if p:
-            outfile_var.set(p)
+    def on_drop(event):
+        p = event.data.strip("{}").strip()
+        in_var.set(p)
+        info_var.set(f"Selected: {Path(p).name}")
+
+    drop = _make_drop_zone(left, browse_in, on_drop if HAS_DND else None)
+    drop.pack(fill="x", padx=14, pady=12)
+
+    row1 = tk.Frame(left, bg=PANEL)
+    row1.pack(fill="x", padx=14, pady=6)
+    tk.Label(row1, text="File:", bg=PANEL, fg=SUBTEXT,
+             font=("Helvetica", 9), width=12, anchor="w").pack(side="left")
+    _entry(row1, in_var).pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+    row2 = tk.Frame(left, bg=PANEL)
+    row2.pack(fill="x", padx=14, pady=6)
+    tk.Label(row2, text="Output (opt):", bg=PANEL, fg=SUBTEXT,
+             font=("Helvetica", 9), width=12, anchor="w").pack(side="left")
+    _entry(row2, out_var).pack(side="left", fill="x", expand=True, padx=(0, 6))
+    tk.Button(row2, text="Browse",
+              command=lambda: out_var.set(filedialog.asksaveasfilename() or out_var.get()),
+              bg=HEADER, fg=TEXT, relief="flat", bd=0,
+              font=("Helvetica", 9), padx=8, pady=4, cursor="hand2",
+              activebackground=BORDER, activeforeground=TEXT).pack(side="left")
+
+    _sep(parent, "vertical").pack(side="left", fill="y")
+
+    right = tk.Frame(parent, bg=PANEL, width=300)
+    right.pack(side="left", fill="both", expand=True)
+    right.pack_propagate(False)
+    _panel_header(right, "Actions")
+
+    tk.Frame(right, bg=PANEL, height=20).pack()
+
+    def do_decompress():
+        _start_op(root, decomp_btn, status_var, pbar,
+                  core.perform_decompression,
+                  _clean(in_var.get()), _clean(out_var.get()))
 
     def do_preview():
-        path = _clean(infile_var.get())
-        if not path:
+        p = _clean(in_var.get())
+        if not p:
             messagebox.showerror("Error", "Select a file first.")
             return
-        _show_text_dialog(frame.winfo_toplevel(), "Preview",
-                          core.preview_archive(path))
+        _show_text("Preview", core.preview_archive(p))
 
     def do_verify():
-        path = _clean(infile_var.get())
-        if not path:
+        p = _clean(in_var.get())
+        if not p:
             messagebox.showerror("Error", "Select a file first.")
             return
-        ok, msg = core.verify_archive(path)
+        ok, msg = core.verify_archive(p)
         (messagebox.showinfo if ok else messagebox.showerror)("Verify", msg)
 
-    ttk.Label(frame, text="Input:").grid(row=0, column=0, sticky="w",
-                                          pady=8, padx=(0, 12))
-    in_entry = ttk.Entry(frame, textvariable=infile_var)
-    in_entry.grid(row=0, column=1, sticky="ew", padx=(0, 8))
-    _bind_drop(in_entry, infile_var)
-    ttk.Button(frame, text="Browse", style="Small.TButton",
-               command=browse_in).grid(row=0, column=2, sticky="e")
+    decomp_btn = _btn(right, "Decompress", do_decompress)
+    decomp_btn.pack(fill="x", padx=16, pady=(0, 8))
 
-    ttk.Label(frame, text="Output (opt):").grid(row=1, column=0, sticky="w",
-                                                 pady=8, padx=(0, 12))
-    out_entry = ttk.Entry(frame, textvariable=outfile_var)
-    out_entry.grid(row=1, column=1, sticky="ew", padx=(0, 8))
-    _bind_drop(out_entry, outfile_var)
-    ttk.Button(frame, text="Browse", style="Small.TButton",
-               command=browse_out).grid(row=1, column=2, sticky="e")
+    preview_btn = tk.Button(right, text="Preview Contents",
+                            command=do_preview, bg=HEADER, fg=ACCENT,
+                            relief="flat", bd=0, font=("Helvetica", 10),
+                            padx=18, pady=8, cursor="hand2",
+                            activebackground=BORDER, activeforeground=TEXT)
+    preview_btn.pack(fill="x", padx=16, pady=(0, 8))
 
-    ttk.Separator(frame, orient="horizontal").grid(
-        row=2, column=0, columnspan=3, sticky="ew", pady=14)
-
-    btn_row = ttk.Frame(frame)
-    btn_row.grid(row=3, column=0, columnspan=3)
-    btn = ttk.Button(btn_row, text="Decompress", command=lambda: _start_operation(
-        root, btn, status_label, progress_bar,
-        core.perform_decompression,
-        _clean(infile_var.get()), _clean(outfile_var.get())
-    ))
-    btn.pack(side="left", padx=(0, 8))
-    ttk.Button(btn_row, text="Preview", style="Small.TButton",
-               command=do_preview).pack(side="left", padx=(0, 8))
-    ttk.Button(btn_row, text="Verify",  style="Small.TButton",
-               command=do_verify).pack(side="left")
-
-    frame.columnconfigure(1, weight=1)
+    verify_btn = tk.Button(right, text="Verify Integrity",
+                           command=do_verify, bg=HEADER, fg=ACCENT,
+                           relief="flat", bd=0, font=("Helvetica", 10),
+                           padx=18, pady=8, cursor="hand2",
+                           activebackground=BORDER, activeforeground=TEXT)
+    verify_btn.pack(fill="x", padx=16)
 
 
-# ─── Batch tab ────────────────────────────────────────────────────────────────
+# ─── Convert mode ──────────────────────────────────────────────────────────────
 
-def _build_batch_tab(frame, root, status_label, progress_bar):
-    files_var  = tk.StringVar(value="No files selected")
-    outdir_var = tk.StringVar()
-    fmt_var    = tk.StringVar(value="zip")
-    level_var  = tk.IntVar(value=9)
-    file_list: list[str] = []
+def _build_convert(parent, root, status_var, info_var, pbar):
+    left = tk.Frame(parent, bg=PANEL, width=380)
+    left.pack(side="left", fill="both", expand=True)
+    left.pack_propagate(False)
+    _panel_header(left, "SUPR to ZIP Conversion")
 
-    def browse_files():
-        paths = filedialog.askopenfilenames(title="Select files")
-        if paths:
-            file_list.clear()
-            file_list.extend(paths)
-            files_var.set(f"{len(file_list)} file(s) selected")
-
-    def browse_outdir():
-        p = filedialog.askdirectory(title="Output directory")
-        if p:
-            outdir_var.set(p)
-
-    ttk.Label(frame, text="Files:").grid(row=0, column=0, sticky="w",
-                                          pady=8, padx=(0, 12))
-    ttk.Label(frame, textvariable=files_var, style="Sub.TLabel").grid(
-        row=0, column=1, sticky="w", padx=(0, 8))
-    ttk.Button(frame, text="Select Files", style="Small.TButton",
-               command=browse_files).grid(row=0, column=2, sticky="e")
-
-    ttk.Label(frame, text="Format:").grid(row=1, column=0, sticky="w",
-                                           pady=8, padx=(0, 12))
-    ttk.Combobox(frame, textvariable=fmt_var, width=12,
-                 values=core.ALL_FORMATS, state="readonly").grid(
-        row=1, column=1, sticky="w", padx=(0, 8))
-
-    ttk.Label(frame, text="Level (1–9):").grid(row=2, column=0, sticky="w",
-                                                pady=8, padx=(0, 12))
-    lr = ttk.Frame(frame)
-    lr.grid(row=2, column=1, sticky="w", padx=(0, 8))
-    ttk.Scale(lr, from_=1, to=9, variable=level_var, orient="horizontal",
-              length=140, command=lambda v: level_var.set(int(float(v)))).pack(
-        side="left")
-    ttk.Label(lr, textvariable=level_var, width=2).pack(side="left", padx=(8, 0))
-
-    ttk.Label(frame, text="Output dir (opt):").grid(row=3, column=0, sticky="w",
-                                                     pady=8, padx=(0, 12))
-    ttk.Entry(frame, textvariable=outdir_var).grid(row=3, column=1, sticky="ew",
-                                                    padx=(0, 8))
-    ttk.Button(frame, text="Browse", style="Small.TButton",
-               command=browse_outdir).grid(row=3, column=2, sticky="e")
-
-    ttk.Separator(frame, orient="horizontal").grid(
-        row=4, column=0, columnspan=3, sticky="ew", pady=14)
-
-    btn = ttk.Button(frame, text="Batch Compress",
-                     command=lambda: _start_operation(
-                         root, btn, status_label, progress_bar,
-                         core.perform_batch_compression,
-                         list(file_list), fmt_var.get(), level_var.get(),
-                         _clean(outdir_var.get()), _progress_cb))
-    btn.grid(row=5, column=0, columnspan=3)
-    frame.columnconfigure(1, weight=1)
-
-
-# ─── Convert tab ──────────────────────────────────────────────────────────────
-
-def _build_convert_tab(frame, root, status_label, progress_bar):
-    infile_var  = tk.StringVar()
-    outfile_var = tk.StringVar()
+    in_var  = tk.StringVar()
+    out_var = tk.StringVar()
 
     def browse_in():
-        p = filedialog.askopenfilename(
-            filetypes=[("SUPR files", "*.supr"), ("All", "*")])
+        p = filedialog.askopenfilename(filetypes=[("SUPR", "*.supr"), ("All", "*")])
         if p:
-            infile_var.set(p)
+            in_var.set(p)
+            info_var.set(f"Selected: {Path(p).name}")
 
-    def browse_out():
-        p = filedialog.asksaveasfilename(
-            defaultextension=".zip", filetypes=[("ZIP", "*.zip")])
-        if p:
-            outfile_var.set(p)
+    def on_drop(event):
+        p = event.data.strip("{}").strip()
+        in_var.set(p)
 
-    ttk.Label(frame, text=".supr file:").grid(row=0, column=0, sticky="w",
-                                               pady=8, padx=(0, 12))
-    in_entry = ttk.Entry(frame, textvariable=infile_var)
-    in_entry.grid(row=0, column=1, sticky="ew", padx=(0, 8))
-    _bind_drop(in_entry, infile_var)
-    ttk.Button(frame, text="Browse", style="Small.TButton",
-               command=browse_in).grid(row=0, column=2, sticky="e")
+    drop = _make_drop_zone(left, browse_in, on_drop if HAS_DND else None)
+    drop.pack(fill="x", padx=14, pady=12)
 
-    ttk.Label(frame, text="Output .zip (opt):").grid(row=1, column=0, sticky="w",
-                                                      pady=8, padx=(0, 12))
-    out_entry = ttk.Entry(frame, textvariable=outfile_var)
-    out_entry.grid(row=1, column=1, sticky="ew", padx=(0, 8))
-    _bind_drop(out_entry, outfile_var)
-    ttk.Button(frame, text="Browse", style="Small.TButton",
-               command=browse_out).grid(row=1, column=2, sticky="e")
+    row1 = tk.Frame(left, bg=PANEL)
+    row1.pack(fill="x", padx=14, pady=6)
+    tk.Label(row1, text=".supr file:", bg=PANEL, fg=SUBTEXT,
+             font=("Helvetica", 9), width=14, anchor="w").pack(side="left")
+    _entry(row1, in_var).pack(side="left", fill="x", expand=True)
 
-    note = ttk.Label(frame,
-                     text="Warning: the resulting ZIP expands to the full original size.",
-                     style="Sub.TLabel")
-    note.grid(row=2, column=0, columnspan=3, sticky="w", pady=(4, 0))
+    row2 = tk.Frame(left, bg=PANEL)
+    row2.pack(fill="x", padx=14, pady=6)
+    tk.Label(row2, text="Output .zip:", bg=PANEL, fg=SUBTEXT,
+             font=("Helvetica", 9), width=14, anchor="w").pack(side="left")
+    _entry(row2, out_var).pack(side="left", fill="x", expand=True, padx=(0, 6))
+    tk.Button(row2, text="Browse",
+              command=lambda: out_var.set(
+                  filedialog.asksaveasfilename(defaultextension=".zip") or out_var.get()),
+              bg=HEADER, fg=TEXT, relief="flat", bd=0,
+              font=("Helvetica", 9), padx=8, pady=4, cursor="hand2",
+              activebackground=BORDER, activeforeground=TEXT).pack(side="left")
 
-    ttk.Separator(frame, orient="horizontal").grid(
-        row=3, column=0, columnspan=3, sticky="ew", pady=14)
+    tk.Label(left,
+             text="  Warning: resulting ZIP expands to full original size.",
+             bg=PANEL, fg=SUBTEXT, font=("Helvetica", 8),
+             wraplength=340, justify="left").pack(anchor="w", padx=14, pady=(8, 0))
 
-    btn = ttk.Button(frame, text="Convert", command=lambda: _start_operation(
-        root, btn, status_label, progress_bar,
-        core.convert_supr_to_zip,
-        _clean(infile_var.get()), _clean(outfile_var.get()), _progress_cb
-    ))
-    btn.grid(row=4, column=0, columnspan=3)
-    frame.columnconfigure(1, weight=1)
+    _sep(parent, "vertical").pack(side="left", fill="y")
+
+    right = tk.Frame(parent, bg=PANEL, width=300)
+    right.pack(side="left", fill="both", expand=True)
+    right.pack_propagate(False)
+    _panel_header(right, "Convert")
+
+    tk.Frame(right, bg=PANEL, height=20).pack()
+
+    def do_convert():
+        _start_op(root, conv_btn, status_var, pbar,
+                  core.convert_supr_to_zip,
+                  _clean(in_var.get()), _clean(out_var.get()), _progress_cb)
+
+    conv_btn = _btn(right, "Convert to ZIP", do_convert)
+    conv_btn.pack(fill="x", padx=16)
 
 
-# ─── Benchmark tab ────────────────────────────────────────────────────────────
+# ─── Benchmark mode ────────────────────────────────────────────────────────────
 
-def _build_benchmark_tab(frame, root, status_label, progress_bar):
-    infile_var = tk.StringVar()
+def _build_benchmark(parent, root, status_var, info_var, pbar):
+    left = tk.Frame(parent, bg=PANEL, width=320)
+    left.pack(side="left", fill="y")
+    left.pack_propagate(False)
+    _panel_header(left, "File Selection")
 
-    def browse_in():
+    in_var = tk.StringVar()
+
+    def browse():
         p = filedialog.askopenfilename()
         if p:
-            infile_var.set(p)
+            in_var.set(p)
+            info_var.set(f"Selected: {Path(p).name}")
 
-    def do_benchmark():
-        path = _clean(infile_var.get())
-        if not path:
-            messagebox.showerror("Error", "Please select a file.")
+    def on_drop(event):
+        p = event.data.strip("{}").strip()
+        in_var.set(p)
+
+    drop = _make_drop_zone(left, browse, on_drop if HAS_DND else None)
+    drop.pack(fill="x", padx=14, pady=12)
+
+    row = tk.Frame(left, bg=PANEL)
+    row.pack(fill="x", padx=14, pady=6)
+    tk.Label(row, text="File:", bg=PANEL, fg=SUBTEXT,
+             font=("Helvetica", 9), width=6, anchor="w").pack(side="left")
+    _entry(row, in_var).pack(side="left", fill="x", expand=True)
+
+    tk.Frame(left, bg=PANEL, height=16).pack()
+
+    def do_bench():
+        p = _clean(in_var.get())
+        if not p:
+            messagebox.showerror("Error", "Select a file first.")
             return
-        result_text.config(state="normal")
-        result_text.delete("1.0", "end")
-        result_text.insert("end", "Running benchmark…\n")
-        result_text.config(state="disabled")
+        status_var.set("Benchmarking…")
+        result_txt.config(state="normal")
+        result_txt.delete("1.0", "end")
+        result_txt.insert("end", "Running…\n")
+        result_txt.config(state="disabled")
 
         def run():
-            result = core.benchmark_file(path)
+            result = core.benchmark_file(p)
             _result_queue.put(("benchmark", result))
 
         threading.Thread(target=run, daemon=True).start()
-        root.after(200, _poll_benchmark)
+        root.after(200, _poll_bench)
 
-    def _poll_benchmark():
+    def _poll_bench():
         try:
             kind, msg = _result_queue.get_nowait()
             if kind == "benchmark":
-                result_text.config(state="normal")
-                result_text.delete("1.0", "end")
-                result_text.insert("end", msg)
-                result_text.config(state="disabled")
-                status_label.config(text="Benchmark complete.")
+                result_txt.config(state="normal")
+                result_txt.delete("1.0", "end")
+                result_txt.insert("end", msg)
+                result_txt.config(state="disabled")
+                status_var.set("Benchmark complete.")
             else:
                 _result_queue.put((kind, msg))
         except queue.Empty:
-            root.after(200, _poll_benchmark)
+            root.after(200, _poll_bench)
 
-    ttk.Label(frame, text="File:").grid(row=0, column=0, sticky="w",
-                                         pady=8, padx=(0, 12))
-    in_entry = ttk.Entry(frame, textvariable=infile_var)
-    in_entry.grid(row=0, column=1, sticky="ew", padx=(0, 8))
-    _bind_drop(in_entry, infile_var)
-    ttk.Button(frame, text="Browse", style="Small.TButton",
-               command=browse_in).grid(row=0, column=2, sticky="e")
+    bench_btn = _btn(left, "Run Benchmark", do_bench)
+    bench_btn.pack(fill="x", padx=14)
 
-    ttk.Button(frame, text="Run Benchmark", command=do_benchmark).grid(
-        row=1, column=0, columnspan=3, pady=(14, 10))
+    _sep(parent, "vertical").pack(side="left", fill="y")
 
-    result_text = tk.Text(
-        frame, height=11, state="disabled",
-        font=("Monospace", 9),
-        bg=C["card"], fg=C["text"],
-        insertbackground=C["text"],
-        selectbackground=C["accent"], selectforeground="white",
-        relief="flat", padx=10, pady=8,
-        borderwidth=0)
-    result_text.grid(row=2, column=0, columnspan=3, sticky="nsew", pady=(0, 4))
-    frame.rowconfigure(2, weight=1)
-    frame.columnconfigure(1, weight=1)
+    right = tk.Frame(parent, bg=PANEL)
+    right.pack(side="left", fill="both", expand=True)
+    _panel_header(right, "Results")
+
+    result_txt = tk.Text(right, bg=ENTRY, fg=TEXT, font=("Monospace", 9),
+                         relief="flat", bd=0, padx=12, pady=10,
+                         insertbackground=TEXT, state="disabled",
+                         selectbackground=ACCENT, selectforeground="white")
+    result_txt.pack(fill="both", expand=True, padx=10, pady=10)
 
 
-# ─── Preview / text dialog ────────────────────────────────────────────────────
+# ─── Text viewer dialog ────────────────────────────────────────────────────────
 
-def _show_text_dialog(parent, title: str, text: str):
-    win = tk.Toplevel(parent)
+def _show_text(title: str, text: str):
+    win = tk.Toplevel()
     win.title(title)
-    win.configure(bg=C["bg"])
-    win.resizable(True, True)
-    win.minsize(500, 340)
+    win.configure(bg=BG)
+    win.minsize(520, 360)
 
-    txt = tk.Text(
-        win, font=("Monospace", 9),
-        bg=C["card"], fg=C["text"],
-        insertbackground=C["text"],
-        selectbackground=C["accent"], selectforeground="white",
-        wrap="none", width=80, height=20,
-        relief="flat", padx=10, pady=8, borderwidth=0)
-    sy = ttk.Scrollbar(win, command=txt.yview)
-    sx = ttk.Scrollbar(win, orient="horizontal", command=txt.xview)
+    txt = tk.Text(win, bg=ENTRY, fg=TEXT, font=("Monospace", 9),
+                  relief="flat", bd=0, padx=12, pady=10, wrap="none",
+                  selectbackground=ACCENT, selectforeground="white")
+    sy = tk.Scrollbar(win, bg=PANEL, troughcolor=PANEL, command=txt.yview)
+    sx = tk.Scrollbar(win, orient="horizontal", bg=PANEL,
+                      troughcolor=PANEL, command=txt.xview)
     txt.configure(yscrollcommand=sy.set, xscrollcommand=sx.set)
-
     txt.grid(row=0, column=0, sticky="nsew")
     sy.grid(row=0, column=1, sticky="ns")
     sx.grid(row=1, column=0, sticky="ew")
 
-    close_bar = tk.Frame(win, bg=C["bg"], pady=8)
-    close_bar.grid(row=2, column=0, columnspan=2, sticky="ew")
-    ttk.Button(close_bar, text="Close", command=win.destroy).pack()
+    bar = tk.Frame(win, bg=BG, pady=8)
+    bar.grid(row=2, column=0, columnspan=2, sticky="ew")
+    tk.Button(bar, text="Close", command=win.destroy,
+              bg=BTN, fg="white", relief="flat", bd=0,
+              font=("Helvetica", 10, "bold"), padx=20, pady=6,
+              cursor="hand2", activebackground=BTN_HOV,
+              activeforeground="white").pack()
 
     win.rowconfigure(0, weight=1)
     win.columnconfigure(0, weight=1)
-
     txt.insert("1.0", text)
     txt.config(state="disabled")
 
 
-# ─── Main launcher ────────────────────────────────────────────────────────────
+# ─── Nav bar ──────────────────────────────────────────────────────────────────
+
+def _make_nav(root_frame, modes: list, on_select):
+    nav = tk.Frame(root_frame, bg=PANEL, pady=0)
+    nav.pack(fill="x")
+
+    # Logo
+    logo = tk.Frame(nav, bg=PANEL, padx=16)
+    logo.pack(side="left")
+    tk.Label(logo, text="SuprCompressr", bg=PANEL, fg=TEXT,
+             font=("Helvetica", 12, "bold")).pack(pady=12)
+
+    _sep(nav, "vertical").pack(side="left", fill="y", pady=8)
+
+    btns: dict = {}
+
+    def select(name):
+        for n, (b, ind) in btns.items():
+            active = (n == name)
+            b.config(fg=ACCENT if active else SUBTEXT)
+            ind.config(bg=ACCENT if active else PANEL)
+        on_select(name)
+
+    for name in modes:
+        col = tk.Frame(nav, bg=PANEL)
+        col.pack(side="left")
+        b = tk.Button(col, text=name, bg=PANEL, fg=SUBTEXT,
+                      relief="flat", bd=0, padx=18, pady=14,
+                      font=("Helvetica", 10), cursor="hand2",
+                      activebackground=PANEL, activeforeground=ACCENT,
+                      command=lambda n=name: select(n))
+        b.pack(fill="x")
+        ind = tk.Frame(col, bg=PANEL, height=2)
+        ind.pack(fill="x")
+        btns[name] = (b, ind)
+
+    select(modes[0])
+    return select
+
+
+# ─── Main launcher ─────────────────────────────────────────────────────────────
 
 def launch_gui():
     RootClass = TkinterDnD.Tk if HAS_DND else tk.Tk
     root = RootClass()
     root.title("SuprCompressr")
-    root.minsize(620, 420)
+    root.configure(bg=BG)
+    root.minsize(700, 500)
     root.resizable(True, True)
 
-    _apply_theme(root)
+    # ttk style for progressbar
+    style = ttk.Style(root)
+    style.theme_use("clam")
+    style.configure("TProgressbar",
+                    troughcolor=BORDER, background=ACCENT,
+                    borderwidth=0, lightcolor=ACCENT, darkcolor=ACCENT,
+                    thickness=4)
 
-    # Header banner
-    header = tk.Frame(root, bg=C["accent"], pady=14)
-    header.pack(fill="x")
-    tk.Label(header, text="SuprCompressr",
-             bg=C["accent"], fg="white",
-             font=("Helvetica", 16, "bold")).pack()
-    tk.Label(header, text="extreme compression for Linux",
-             bg=C["accent"], fg="#c7d2fe",
-             font=("Helvetica", 9)).pack()
+    # ── Status / info vars (shared across modes) ──
+    status_var = tk.StringVar(value="Ready to Compress")
+    info_var   = tk.StringVar(value="No files selected")
 
-    notebook = ttk.Notebook(root)
-    notebook.pack(fill="both", expand=True)
+    # ── Nav bar ──
+    MODES = ["Compress", "Decompress", ".supr → .zip", "Benchmark"]
 
-    # Status bar
-    bar = tk.Frame(root, bg=C["surface"], pady=7)
-    bar.pack(fill="x")
-    status_label = ttk.Label(bar, text="Ready", style="Sub.TLabel",
-                              background=C["surface"])
-    status_label.pack(side="left", padx=14)
-    progress_bar = ttk.Progressbar(bar, mode="determinate", length=210)
-    progress_bar.pack(side="right", padx=14)
+    _sep(root).pack(fill="x")  # top border under nav
 
-    tab_defs = [
-        ("  Compress  ",  _build_compress_tab),
-        (" Decompress ",  _build_decompress_tab),
-        ("   Batch    ",  _build_batch_tab),
-        (".supr → .zip",  _build_convert_tab),
-        (" Benchmark  ",  _build_benchmark_tab),
-    ]
-    for label, builder in tab_defs:
-        f = ttk.Frame(notebook, padding=16)
-        notebook.add(f, text=label)
-        builder(f, root, status_label, progress_bar)
+    # ── Content area ──
+    content = tk.Frame(root, bg=BG)
+    content.pack(fill="both", expand=True)
+
+    mode_frames: dict[str, tk.Frame] = {}
+
+    def show_mode(name):
+        for n, f in mode_frames.items():
+            if n == name:
+                f.pack(fill="both", expand=True)
+            else:
+                f.pack_forget()
+        if name == "Compress":
+            status_var.set("Ready to Compress")
+        else:
+            status_var.set("Ready")
+
+    # Build all mode frames
+    builders = {
+        "Compress":      _build_compress,
+        "Decompress":    _build_decompress,
+        ".supr → .zip":  _build_convert,
+        "Benchmark":     _build_benchmark,
+    }
+
+    # Build progress bar (needed by builders)
+    pbar = ttk.Progressbar(root, mode="determinate", style="TProgressbar")
+
+    for name, builder in builders.items():
+        outer = tk.Frame(content, bg=PANEL)
+        mode_frames[name] = outer
+        builder(outer, root, status_var, info_var, pbar)
+
+    # Nav (built after frames so show_mode works)
+    _make_nav(root, MODES, show_mode)
+    _sep(root).pack(fill="x")
+
+    # Reorder: nav → sep → content → status
+    # (pack order: nav first, then content, then status bar)
+    # Fix pack order by using place or rebuilding — easier: just show first mode
+    show_mode("Compress")
+
+    # ── Status bar ──
+    sbar = tk.Frame(root, bg=PANEL, pady=0)
+    sbar.pack(fill="x", side="bottom")
+
+    _sep(sbar).pack(fill="x")
+
+    inner = tk.Frame(sbar, bg=PANEL)
+    inner.pack(fill="x", padx=14, pady=7)
+
+    tk.Label(inner, textvariable=status_var, bg=PANEL, fg=TEXT,
+             font=("Helvetica", 9, "bold"), width=18,
+             anchor="w").pack(side="left")
+
+    pbar.pack(side="left", fill="x", expand=True, padx=14)
+
+    tk.Label(inner, textvariable=info_var, bg=PANEL, fg=SUBTEXT,
+             font=("Helvetica", 8)).pack(side="right")
+
+    # Rebuild pack order: nav needs to be at top
+    # Destroy and rebuild nav in correct position
+    for widget in root.pack_slaves():
+        widget.pack_forget()
+
+    nav_frame = tk.Frame(root, bg=PANEL)
+    nav_frame.pack(fill="x", side="top")
+    _make_nav(nav_frame, MODES, show_mode)
+
+    _sep(root).pack(fill="x", side="top")
+    content.pack(fill="both", expand=True, side="top")
+    sbar.pack(fill="x", side="bottom")
+
+    show_mode("Compress")
 
     root.mainloop()
 
